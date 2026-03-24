@@ -1,13 +1,28 @@
 package main
 
 import (
-	"bufio"
+	"context"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"strings"
+	"time"
+
+	"golang.org/x/crypto/ssh"
 )
+
+// channelConn wraps an ssh.Channel to satisfy net.Conn.
+type channelConn struct {
+	ssh.Channel
+}
+
+func (c *channelConn) LocalAddr() net.Addr                { return &net.TCPAddr{} }
+func (c *channelConn) RemoteAddr() net.Addr               { return &net.TCPAddr{} }
+func (c *channelConn) SetDeadline(t time.Time) error      { return nil }
+func (c *channelConn) SetReadDeadline(t time.Time) error  { return nil }
+func (c *channelConn) SetWriteDeadline(t time.Time) error { return nil }
 
 // Proxy routes incoming HTTP requests to the correct SSH tunnel based on subdomain.
 type Proxy struct {
@@ -60,56 +75,28 @@ func (p *Proxy) handleTunnelCheck(w http.ResponseWriter, r *http.Request) {
 }
 
 func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnel *Tunnel) {
-	ch, err := tunnel.Dial(r.RemoteAddr)
-	if err != nil {
-		log.Printf("Dial tunnel %s: %v", tunnel.Subdomain, err)
-		http.Error(w, "Tunnel unavailable", http.StatusBadGateway)
-		return
-	}
-	defer ch.Close()
-
-	// Forward the HTTP request through the SSH channel
-	if err := r.Write(ch); err != nil {
-		log.Printf("Write to tunnel %s: %v", tunnel.Subdomain, err)
-		http.Error(w, "Failed to reach tunnel", http.StatusBadGateway)
-		return
-	}
-
-	// Read the response from the local service
-	resp, err := http.ReadResponse(bufio.NewReader(ch), r)
-	if err != nil {
-		log.Printf("Read from tunnel %s: %v", tunnel.Subdomain, err)
-		http.Error(w, "Bad response from tunnel", http.StatusBadGateway)
-		return
-	}
-	defer resp.Body.Close()
-
-	// Copy response headers
-	for key, vals := range resp.Header {
-		for _, v := range vals {
-			w.Header().Add(key, v)
-		}
-	}
-	w.WriteHeader(resp.StatusCode)
-
-	// Stream the body with flushing (supports SSE / chunked streaming)
-	if flusher, ok := w.(http.Flusher); ok {
-		buf := make([]byte, 32*1024)
-		for {
-			n, err := resp.Body.Read(buf)
-			if n > 0 {
-				if _, werr := w.Write(buf[:n]); werr != nil {
-					break
+	rp := &httputil.ReverseProxy{
+		Director: func(req *http.Request) {
+			req.URL.Scheme = "http"
+			req.URL.Host = req.Host
+		},
+		Transport: &http.Transport{
+			DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+				ch, err := tunnel.Dial(r.RemoteAddr)
+				if err != nil {
+					return nil, err
 				}
-				flusher.Flush()
-			}
-			if err != nil {
-				break
-			}
-		}
-	} else {
-		io.Copy(w, resp.Body)
+				return &channelConn{ch}, nil
+			},
+			DisableKeepAlives: true,
+		},
+		FlushInterval: -1, // flush immediately for SSE/streaming
+		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
+			log.Printf("Proxy error for %s: %v", tunnel.Subdomain, err)
+			http.Error(w, "Tunnel error", http.StatusBadGateway)
+		},
 	}
+	rp.ServeHTTP(w, r)
 }
 
 func (p *Proxy) handleWebSocket(w http.ResponseWriter, r *http.Request, tunnel *Tunnel) {
