@@ -317,9 +317,3 @@ ssh-keygen -R "[tunnel.example.com]:2222"
 ### Caddy not issuing wildcard cert
 
 Wildcard certs require DNS challenge. Make sure you have the correct [Caddy DNS plugin](https://caddyserver.com/docs/modules/) installed and configured with your DNS provider's API token.
-
-## License
-
-MIT
-#   t u n n e l  
- 
