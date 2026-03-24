@@ -1,7 +1,7 @@
 FROM golang:1.22-alpine AS builder
 WORKDIR /src
 COPY go.mod ./
-RUN go mod download
+RUN go mod tidy
 COPY *.go ./
 RUN CGO_ENABLED=0 go build -o /tunneld .
 
