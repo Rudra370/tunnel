@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"log"
 	"net"
@@ -37,7 +38,7 @@ func NewSSHServer(hostKeyPath, authKeysPath, password, domain string, registry *
 		}
 		config.PublicKeyCallback = func(conn ssh.ConnMetadata, key ssh.PublicKey) (*ssh.Permissions, error) {
 			for _, ak := range keys {
-				if ssh.KeysEqual(ak, key) {
+				if bytes.Equal(ak.Marshal(), key.Marshal()) {
 					return &ssh.Permissions{}, nil
 				}
 			}
