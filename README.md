@@ -67,29 +67,29 @@ Where to do this depends on your DNS provider (Cloudflare, Namecheap, Route53, e
 
 ### Step 2: Caddy
 
-Add this block to your Caddyfile:
+Add these blocks to your Caddyfile. This uses **on-demand TLS** — Caddy issues a cert per subdomain on first request (no DNS plugin needed):
 
 ```caddyfile
+{
+    on_demand_tls {
+        ask http://localhost:3018/tunnel-check
+    }
+}
+
 *.tunnel.example.com {
+    tls {
+        on_demand
+    }
     reverse_proxy localhost:3018
 }
 ```
+
+The `ask` endpoint prevents abuse — Caddy checks with tunneld whether the subdomain has an active tunnel before issuing a cert. First visit to a new subdomain has a ~1-2s delay for cert issuance, then it's cached.
 
 Then reload Caddy:
 
 ```bash
 sudo systemctl reload caddy
-```
-
-Caddy will automatically obtain a wildcard TLS certificate via Let's Encrypt. For wildcard certs, Caddy needs a DNS challenge. If you haven't set this up before, you'll need the [Caddy DNS plugin](https://caddyserver.com/docs/modules/) for your provider. Example for Cloudflare:
-
-```caddyfile
-*.tunnel.example.com {
-    tls {
-        dns cloudflare {env.CF_API_TOKEN}
-    }
-    reverse_proxy localhost:3018
-}
 ```
 
 ### Step 3: Deploy tunneld

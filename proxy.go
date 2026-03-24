@@ -20,6 +20,12 @@ func NewProxy(domain string, registry *Registry) *Proxy {
 }
 
 func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Caddy on_demand_tls check: is this subdomain active?
+	if r.URL.Path == "/tunnel-check" {
+		p.handleTunnelCheck(w, r)
+		return
+	}
+
 	subdomain := p.extractSubdomain(r.Host)
 	if subdomain == "" {
 		http.Error(w, "No tunnel specified. Use <id>."+p.domain, http.StatusBadRequest)
@@ -38,6 +44,19 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	p.handleHTTP(w, r, tunnel)
+}
+
+// handleTunnelCheck responds to Caddy's on_demand_tls "ask" request.
+// Caddy sends GET /tunnel-check?domain=<subdomain>.tunnel.example.com
+// Return 200 if the tunnel is active, 404 otherwise.
+func (p *Proxy) handleTunnelCheck(w http.ResponseWriter, r *http.Request) {
+	domain := r.URL.Query().Get("domain")
+	subdomain := p.extractSubdomain(domain)
+	if subdomain != "" && p.registry.Get(subdomain) != nil {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Error(w, "no active tunnel", http.StatusNotFound)
 }
 
 func (p *Proxy) handleHTTP(w http.ResponseWriter, r *http.Request, tunnel *Tunnel) {
