@@ -54,20 +54,20 @@ No custom client needed — just standard `ssh`.
 
 ### Step 1: DNS
 
-Add a **wildcard A record** pointing to your server:
+Add **two A records** pointing to your server — one for the base domain (SSH connections) and one wildcard (tunnel URLs):
 
-```
-*.tunnel.example.com  →  YOUR_SERVER_IP
-```
+| Type | Name | Value |
+|------|------|-------|
+| A | `tunnel` | YOUR_SERVER_IP |
+| A | `*.tunnel` | YOUR_SERVER_IP |
 
-Where to do this depends on your DNS provider (Cloudflare, Namecheap, Route53, etc.). Create an A record with:
-- **Name:** `*.tunnel` (if your domain is `example.com`)
-- **Value:** your server's public IP
-- **TTL:** Auto or 300
+Where to do this depends on your DNS provider (Cloudflare, Namecheap, Route53, etc.).
+
+> **Why two records?** The wildcard `*.tunnel.example.com` covers subdomains like `abc123.tunnel.example.com` (tunnel URLs), but does NOT cover `tunnel.example.com` itself (where you SSH to). You need both.
 
 ### Step 2: Caddy
 
-Add these blocks to your Caddyfile. This uses **on-demand TLS** — Caddy issues a cert per subdomain on first request (no DNS plugin needed):
+Add these blocks to your Caddyfile. This uses **on-demand TLS** — Caddy issues a cert per subdomain on first request, no DNS plugin or custom Caddy build needed:
 
 ```caddyfile
 {
@@ -84,7 +84,9 @@ Add these blocks to your Caddyfile. This uses **on-demand TLS** — Caddy issues
 }
 ```
 
-The `ask` endpoint prevents abuse — Caddy checks with tunneld whether the subdomain has an active tunnel before issuing a cert. First visit to a new subdomain has a ~1-2s delay for cert issuance, then it's cached.
+The `ask` endpoint prevents abuse — before issuing a cert, Caddy checks with tunneld whether the subdomain has an active tunnel. Only active tunnels get certs.
+
+First visit to a new subdomain has a ~1-2s delay for cert issuance, then it's cached and instant.
 
 Then reload Caddy:
 
@@ -321,6 +323,16 @@ tunnel/
 - Verify DNS: `dig abc123.tunnel.example.com` should resolve to your server IP
 - Check Caddy is proxying to port 3018: `curl -H "Host: abc123.tunnel.example.com" http://localhost:3018`
 
+### SSH "Could not resolve hostname"
+
+Make sure you have the **non-wildcard** A record for `tunnel.example.com` (not just `*.tunnel.example.com`). The wildcard only covers subdomains, not the base domain itself. See [Step 1: DNS](#step-1-dns).
+
+As a workaround, you can SSH using the server IP directly:
+
+```bash
+ssh -p 3017 myapp@YOUR_SERVER_IP -R 0:localhost:3000
+```
+
 ### SSH connection refused
 
 - Check port is open: `nc -zv tunnel.example.com 3017`
@@ -335,6 +347,8 @@ The host key is auto-generated on first start. If you recreate the container vol
 ssh-keygen -R "[tunnel.example.com]:3017"
 ```
 
-### Caddy not issuing wildcard cert
+### Caddy not issuing certs
 
-Wildcard certs require DNS challenge. Make sure you have the correct [Caddy DNS plugin](https://caddyserver.com/docs/modules/) installed and configured with your DNS provider's API token.
+- Make sure both DNS records exist (`tunnel` and `*.tunnel`)
+- Check the `on_demand_tls` `ask` URL is reachable: `curl http://localhost:3018/tunnel-check?domain=test.tunnel.example.com` (should return 404 if no tunnel, 200 if active)
+- Check Caddy logs: `journalctl -u caddy --no-pager -n 20`
