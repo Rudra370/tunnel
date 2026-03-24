@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -128,7 +127,7 @@ func (s *SSHServer) HandleConn(netConn net.Conn) {
 	sessionChan := make(chan ssh.Channel, 1)
 
 	go s.displayURLs(urlChan, sessionChan, done)
-	go s.handleChannels(chans, sessionChan)
+	go s.handleChannels(sshConn, chans, sessionChan)
 
 	// Main loop: process global requests (tcpip-forward, keepalive, etc.)
 	for req := range reqs {
@@ -191,7 +190,7 @@ func (s *SSHServer) displayURLs(urlChan <-chan string, sessionChan <-chan ssh.Ch
 
 // handleChannels accepts SSH session channels (needed for the client to stay connected
 // and for us to print the tunnel URL).
-func (s *SSHServer) handleChannels(chans <-chan ssh.NewChannel, sessionChan chan<- ssh.Channel) {
+func (s *SSHServer) handleChannels(conn *ssh.ServerConn, chans <-chan ssh.NewChannel, sessionChan chan<- ssh.Channel) {
 	for newChan := range chans {
 		if newChan.ChannelType() != "session" {
 			newChan.Reject(ssh.UnknownChannelType, "unsupported channel type")
@@ -223,11 +222,21 @@ func (s *SSHServer) handleChannels(chans <-chan ssh.NewChannel, sessionChan chan
 			}
 		}(chReqs)
 
-		// Read from session so Ctrl+C / client disconnect is handled
+		// Read from session — detect Ctrl+C (0x03) or EOF to close the connection
 		go func() {
-			io.Copy(io.Discard, ch)
+			buf := make([]byte, 1)
+			for {
+				n, err := ch.Read(buf)
+				if err != nil {
+					break
+				}
+				if n > 0 && buf[0] == 3 { // Ctrl+C
+					break
+				}
+			}
 			ch.SendRequest("exit-status", false, []byte{0, 0, 0, 0})
 			ch.Close()
+			conn.Close()
 		}()
 	}
 }
