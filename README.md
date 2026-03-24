@@ -3,7 +3,7 @@
 A self-hosted SSH tunnel server. Expose your local services to the internet through public HTTPS URLs — like ngrok/Pinggy, but on your own server with no time limits.
 
 ```
-ssh -p 3017 t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 t@tunnel.example.com -R 0:127.0.0.1:3000
 ```
 ```
   Tunnel: https://a3f2b1c8.tunnel.example.com
@@ -157,8 +157,10 @@ sudo ufw allow 3017/tcp
 Expose a local web server running on port 3000:
 
 ```bash
-ssh -p 3017 tunnel@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 tunnel@tunnel.example.com -R 0:127.0.0.1:3000
 ```
+
+> **Use `127.0.0.1`, not `localhost`.** On Windows, `localhost` can resolve to IPv6 (`::1`) first. If your local service only listens on IPv4, the tunnel will fail silently.
 
 You get a random subdomain like `https://a3f2b1c8.tunnel.example.com`.
 
@@ -167,7 +169,7 @@ You get a random subdomain like `https://a3f2b1c8.tunnel.example.com`.
 Use the SSH **username** to pick your subdomain:
 
 ```bash
-ssh -p 3017 myapp@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 myapp@tunnel.example.com -R 0:127.0.0.1:3000
 # → https://myapp.tunnel.example.com
 ```
 
@@ -182,8 +184,8 @@ Expose multiple services at once:
 
 ```bash
 ssh -p 3017 t@tunnel.example.com \
-  -R 0:localhost:3000 \
-  -R 0:localhost:8080
+  -R 0:127.0.0.1:3000 \
+  -R 0:127.0.0.1:8080
 ```
 
 Each `-R` gets its own subdomain.
@@ -193,7 +195,7 @@ Each `-R` gets its own subdomain.
 Run the tunnel in the background:
 
 ```bash
-ssh -p 3017 -f -N t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 -f -N t@tunnel.example.com -R 0:127.0.0.1:3000
 ```
 
 - `-f` — go to background after authenticating
@@ -323,6 +325,20 @@ tunnel/
 - Verify DNS: `dig abc123.tunnel.example.com` should resolve to your server IP
 - Check Caddy is proxying to port 3018: `curl -H "Host: abc123.tunnel.example.com" http://localhost:3018`
 
+### "Tunnel error" / EOF when visiting the URL
+
+Your tunnel connects but the page shows an error. This is almost always because the SSH client can't reach your local service. Common cause on **Windows**: `localhost` resolves to IPv6 (`::1`) but your service only listens on IPv4 (`127.0.0.1`).
+
+**Fix:** Use `127.0.0.1` instead of `localhost` in your SSH command:
+
+```bash
+# Bad  — may fail on Windows
+ssh -p 3017 myapp@server -R 0:localhost:3000
+
+# Good — always works
+ssh -p 3017 myapp@server -R 0:127.0.0.1:3000
+```
+
 ### SSH "Could not resolve hostname"
 
 Make sure you have the **non-wildcard** A record for `tunnel.example.com` (not just `*.tunnel.example.com`). The wildcard only covers subdomains, not the base domain itself. See [Step 1: DNS](#step-1-dns).
@@ -330,7 +346,7 @@ Make sure you have the **non-wildcard** A record for `tunnel.example.com` (not j
 As a workaround, you can SSH using the server IP directly:
 
 ```bash
-ssh -p 3017 myapp@YOUR_SERVER_IP -R 0:localhost:3000
+ssh -p 3017 myapp@YOUR_SERVER_IP -R 0:127.0.0.1:3000
 ```
 
 ### SSH connection refused
