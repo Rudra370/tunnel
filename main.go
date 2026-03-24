@@ -17,8 +17,8 @@ import (
 
 func main() {
 	domain := flag.String("domain", envOr("TUNNEL_DOMAIN", ""), "Base domain for tunnels (required)")
-	sshAddr := flag.String("ssh-addr", envOr("TUNNEL_SSH_ADDR", ":3015"), "SSH listen address")
-	httpAddr := flag.String("http-addr", envOr("TUNNEL_HTTP_ADDR", ":8080"), "HTTP listen address")
+	sshAddr := flag.String("ssh-addr", envOr("TUNNEL_SSH_ADDR", ":3017"), "SSH listen address")
+	httpAddr := flag.String("http-addr", envOr("TUNNEL_HTTP_ADDR", ":3018"), "HTTP listen address")
 	hostKeyPath := flag.String("host-key", envOr("TUNNEL_HOST_KEY", "host_key"), "SSH host key (auto-generated if missing)")
 	authKeysPath := flag.String("authorized-keys", envOr("TUNNEL_AUTHORIZED_KEYS", ""), "Path to authorized_keys file")
 	password := flag.String("password", envOr("TUNNEL_PASSWORD", ""), "Password for SSH auth")

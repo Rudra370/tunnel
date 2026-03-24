@@ -3,7 +3,7 @@
 A self-hosted SSH tunnel server. Expose your local services to the internet through public HTTPS URLs — like ngrok/Pinggy, but on your own server with no time limits.
 
 ```
-ssh -p 3015 t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 t@tunnel.example.com -R 0:localhost:3000
 ```
 ```
   Tunnel: https://a3f2b1c8.tunnel.example.com
@@ -71,7 +71,7 @@ Add this block to your Caddyfile:
 
 ```caddyfile
 *.tunnel.example.com {
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:3018
 }
 ```
 
@@ -88,7 +88,7 @@ Caddy will automatically obtain a wildcard TLS certificate via Let's Encrypt. Fo
     tls {
         dns cloudflare {env.CF_API_TOKEN}
     }
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:3018
 }
 ```
 
@@ -113,7 +113,8 @@ Set your values:
 ```env
 TUNNEL_DOMAIN=tunnel.example.com
 TUNNEL_PASSWORD=your-strong-password-here
-TUNNEL_SSH_PORT=3015
+TUNNEL_SSH_PORT=3017
+TUNNEL_HTTP_PORT=3018
 ```
 
 Start the server:
@@ -133,18 +134,18 @@ You should see:
 ```
 tunneld  | Generating SSH host key at /data/host_key
 tunneld  | Password auth enabled
-tunneld  | SSH server listening on :3015
-tunneld  | HTTP proxy listening on :8080
+tunneld  | SSH server listening on :3017
+tunneld  | HTTP proxy listening on :3018
 tunneld  | Tunnels will be available at https://<id>.tunnel.example.com
 ```
 
 ### Step 4: Firewall
 
-Make sure port **3015** (or your configured `TUNNEL_SSH_PORT`) is open on your server's firewall. Port 8080 only needs to be accessible from localhost (Caddy).
+Make sure port **3017** (or your configured `TUNNEL_SSH_PORT`) is open on your server's firewall. Port 3018 only needs to be accessible from localhost (Caddy).
 
 ```bash
 # Example: ufw
-sudo ufw allow 3015/tcp
+sudo ufw allow 3017/tcp
 ```
 
 ## Usage
@@ -154,7 +155,7 @@ sudo ufw allow 3015/tcp
 Expose a local web server running on port 3000:
 
 ```bash
-ssh -p 3015 tunnel@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 tunnel@tunnel.example.com -R 0:localhost:3000
 ```
 
 You get a random subdomain like `https://a3f2b1c8.tunnel.example.com`.
@@ -164,7 +165,7 @@ You get a random subdomain like `https://a3f2b1c8.tunnel.example.com`.
 Use the SSH **username** to pick your subdomain:
 
 ```bash
-ssh -p 3015 myapp@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 myapp@tunnel.example.com -R 0:localhost:3000
 # → https://myapp.tunnel.example.com
 ```
 
@@ -178,7 +179,7 @@ Rules:
 Expose multiple services at once:
 
 ```bash
-ssh -p 3015 t@tunnel.example.com \
+ssh -p 3017 t@tunnel.example.com \
   -R 0:localhost:3000 \
   -R 0:localhost:8080
 ```
@@ -190,7 +191,7 @@ Each `-R` gets its own subdomain.
 Run the tunnel in the background:
 
 ```bash
-ssh -p 3015 -f -N t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3017 -f -N t@tunnel.example.com -R 0:localhost:3000
 ```
 
 - `-f` — go to background after authenticating
@@ -210,7 +211,7 @@ Add to your `~/.bashrc` or `~/.zshrc` for convenience:
 tunnel() {
   local port="${1:-3000}"
   local name="${2:-t}"
-  ssh -p 3015 "${name}@tunnel.example.com" -R "0:localhost:${port}"
+  ssh -p 3017 "${name}@tunnel.example.com" -R "0:localhost:${port}"
 }
 ```
 
@@ -265,9 +266,10 @@ All options can be set via flags or environment variables:
 | `-domain` | `TUNNEL_DOMAIN` | *(required)* | Base domain for tunnel URLs |
 | `-password` | `TUNNEL_PASSWORD` | | Password for SSH authentication |
 | `-authorized-keys` | `TUNNEL_AUTHORIZED_KEYS` | | Path to authorized_keys file |
-| `-ssh-addr` | `TUNNEL_SSH_ADDR` | `:3015` | SSH server listen address |
-| | `TUNNEL_SSH_PORT` | `3015` | SSH port (used by docker-compose for port mapping) |
-| `-http-addr` | `TUNNEL_HTTP_ADDR` | `:8080` | HTTP proxy listen address |
+| `-ssh-addr` | `TUNNEL_SSH_ADDR` | `:3017` | SSH server listen address |
+| | `TUNNEL_SSH_PORT` | `3017` | SSH port (used by docker-compose for port mapping) |
+| | `TUNNEL_HTTP_PORT` | `3018` | HTTP port (used by docker-compose for port mapping) |
+| `-http-addr` | `TUNNEL_HTTP_ADDR` | `:3018` | HTTP proxy listen address |
 | `-host-key` | `TUNNEL_HOST_KEY` | `host_key` | Path to SSH host key (auto-generated if missing) |
 
 At least one of `-password` or `-authorized-keys` must be provided.
@@ -317,11 +319,11 @@ tunnel/
 
 - Check the tunnel is still active (SSH connection alive)
 - Verify DNS: `dig abc123.tunnel.example.com` should resolve to your server IP
-- Check Caddy is proxying to port 8080: `curl -H "Host: abc123.tunnel.example.com" http://localhost:8080`
+- Check Caddy is proxying to port 3018: `curl -H "Host: abc123.tunnel.example.com" http://localhost:3018`
 
 ### SSH connection refused
 
-- Check port is open: `nc -zv tunnel.example.com 3015`
+- Check port is open: `nc -zv tunnel.example.com 3017`
 - Check the container is running: `docker compose ps`
 - Check logs: `docker compose logs tunneld`
 
@@ -330,7 +332,7 @@ tunnel/
 The host key is auto-generated on first start. If you recreate the container volume, the key changes and SSH clients will complain. Fix:
 
 ```bash
-ssh-keygen -R "[tunnel.example.com]:3015"
+ssh-keygen -R "[tunnel.example.com]:3017"
 ```
 
 ### Caddy not issuing wildcard cert
