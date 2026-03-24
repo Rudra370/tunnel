@@ -3,11 +3,12 @@ services:
     build: .
     container_name: tunneld
     ports:
-      - "2222:2222"              # SSH - exposed to internet
-      - "127.0.0.1:8080:8080"   # HTTP - only for Caddy on the host
+      - "${TUNNEL_SSH_PORT:-3015}:${TUNNEL_SSH_PORT:-3015}"   # SSH - exposed to internet
+      - "127.0.0.1:8080:8080"                                 # HTTP - only for Caddy on the host
     environment:
       - TUNNEL_DOMAIN=${TUNNEL_DOMAIN}
       - TUNNEL_PASSWORD=${TUNNEL_PASSWORD}
+      - TUNNEL_SSH_ADDR=:${TUNNEL_SSH_PORT:-3015}
     volumes:
       - tunnel-data:/data       # persists host key across restarts
     restart: unless-stopped

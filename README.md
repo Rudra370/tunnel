@@ -3,7 +3,7 @@
 A self-hosted SSH tunnel server. Expose your local services to the internet through public HTTPS URLs — like ngrok/Pinggy, but on your own server with no time limits.
 
 ```
-ssh -p 2222 t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3015 t@tunnel.example.com -R 0:localhost:3000
 ```
 ```
   Tunnel: https://a3f2b1c8.tunnel.example.com
@@ -113,6 +113,7 @@ Set your values:
 ```env
 TUNNEL_DOMAIN=tunnel.example.com
 TUNNEL_PASSWORD=your-strong-password-here
+TUNNEL_SSH_PORT=3015
 ```
 
 Start the server:
@@ -132,18 +133,18 @@ You should see:
 ```
 tunneld  | Generating SSH host key at /data/host_key
 tunneld  | Password auth enabled
-tunneld  | SSH server listening on :2222
+tunneld  | SSH server listening on :3015
 tunneld  | HTTP proxy listening on :8080
 tunneld  | Tunnels will be available at https://<id>.tunnel.example.com
 ```
 
 ### Step 4: Firewall
 
-Make sure port **2222** (SSH) is open on your server's firewall. Port 8080 only needs to be accessible from localhost (Caddy).
+Make sure port **3015** (or your configured `TUNNEL_SSH_PORT`) is open on your server's firewall. Port 8080 only needs to be accessible from localhost (Caddy).
 
 ```bash
 # Example: ufw
-sudo ufw allow 2222/tcp
+sudo ufw allow 3015/tcp
 ```
 
 ## Usage
@@ -153,17 +154,31 @@ sudo ufw allow 2222/tcp
 Expose a local web server running on port 3000:
 
 ```bash
-ssh -p 2222 tunnel@tunnel.example.com -R 0:localhost:3000
+ssh -p 3015 tunnel@tunnel.example.com -R 0:localhost:3000
 ```
 
-The username (`tunnel`) can be anything — only the password matters.
+You get a random subdomain like `https://a3f2b1c8.tunnel.example.com`.
+
+### Custom subdomain
+
+Use the SSH **username** to pick your subdomain:
+
+```bash
+ssh -p 3015 myapp@tunnel.example.com -R 0:localhost:3000
+# → https://myapp.tunnel.example.com
+```
+
+Rules:
+- Lowercase letters, numbers, and hyphens only
+- Must be at least 2 characters
+- If the name is already taken by another active tunnel, you get a random one instead
 
 ### Multiple ports
 
 Expose multiple services at once:
 
 ```bash
-ssh -p 2222 t@tunnel.example.com \
+ssh -p 3015 t@tunnel.example.com \
   -R 0:localhost:3000 \
   -R 0:localhost:8080
 ```
@@ -175,7 +190,7 @@ Each `-R` gets its own subdomain.
 Run the tunnel in the background:
 
 ```bash
-ssh -p 2222 -f -N t@tunnel.example.com -R 0:localhost:3000
+ssh -p 3015 -f -N t@tunnel.example.com -R 0:localhost:3000
 ```
 
 - `-f` — go to background after authenticating
@@ -193,15 +208,18 @@ Add to your `~/.bashrc` or `~/.zshrc` for convenience:
 
 ```bash
 tunnel() {
-  ssh -p 2222 t@tunnel.example.com -R "0:localhost:${1:-3000}"
+  local port="${1:-3000}"
+  local name="${2:-t}"
+  ssh -p 3015 "${name}@tunnel.example.com" -R "0:localhost:${port}"
 }
 ```
 
-Then just:
+Then:
 
 ```bash
-tunnel 3000
-tunnel 8080
+tunnel 3000              # random subdomain
+tunnel 3000 myapp        # https://myapp.tunnel.example.com
+tunnel 8080 api          # https://api.tunnel.example.com
 ```
 
 ### Using SSH keys instead of (or with) password
@@ -247,7 +265,8 @@ All options can be set via flags or environment variables:
 | `-domain` | `TUNNEL_DOMAIN` | *(required)* | Base domain for tunnel URLs |
 | `-password` | `TUNNEL_PASSWORD` | | Password for SSH authentication |
 | `-authorized-keys` | `TUNNEL_AUTHORIZED_KEYS` | | Path to authorized_keys file |
-| `-ssh-addr` | `TUNNEL_SSH_ADDR` | `:2222` | SSH server listen address |
+| `-ssh-addr` | `TUNNEL_SSH_ADDR` | `:3015` | SSH server listen address |
+| | `TUNNEL_SSH_PORT` | `3015` | SSH port (used by docker-compose for port mapping) |
 | `-http-addr` | `TUNNEL_HTTP_ADDR` | `:8080` | HTTP proxy listen address |
 | `-host-key` | `TUNNEL_HOST_KEY` | `host_key` | Path to SSH host key (auto-generated if missing) |
 
@@ -302,7 +321,7 @@ tunnel/
 
 ### SSH connection refused
 
-- Check port 2222 is open: `nc -zv tunnel.example.com 2222`
+- Check port is open: `nc -zv tunnel.example.com 3015`
 - Check the container is running: `docker compose ps`
 - Check logs: `docker compose logs tunneld`
 
@@ -311,7 +330,7 @@ tunnel/
 The host key is auto-generated on first start. If you recreate the container volume, the key changes and SSH clients will complain. Fix:
 
 ```bash
-ssh-keygen -R "[tunnel.example.com]:2222"
+ssh-keygen -R "[tunnel.example.com]:3015"
 ```
 
 ### Caddy not issuing wildcard cert

@@ -5,6 +5,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"strings"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -224,6 +225,7 @@ func (s *SSHServer) handleChannels(chans <-chan ssh.NewChannel, sessionChan chan
 
 // handleForward processes a tcpip-forward request: generates a subdomain,
 // registers the tunnel, and replies with the bound port.
+// If the SSH username is a valid subdomain and available, it's used as the subdomain.
 func (s *SSHServer) handleForward(conn *ssh.ServerConn, req *ssh.Request) string {
 	var fwdReq tcpipForwardRequest
 	if err := ssh.Unmarshal(req.Payload, &fwdReq); err != nil {
@@ -234,7 +236,15 @@ func (s *SSHServer) handleForward(conn *ssh.ServerConn, req *ssh.Request) string
 		return ""
 	}
 
-	sub := s.generateUniqueSubdomain()
+	// Use SSH username as subdomain if valid and available, otherwise random
+	requested := strings.ToLower(conn.User())
+	var sub string
+	if isValidSubdomain(requested) && s.registry.Get(requested) == nil {
+		sub = requested
+	} else {
+		sub = s.generateUniqueSubdomain()
+	}
+
 	tunnel := &Tunnel{
 		Subdomain: sub,
 		SSHConn:   conn,

@@ -5,11 +5,14 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
 )
+
+var validSubdomain = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
 
 // Tunnel represents an active SSH tunnel mapped to a public subdomain.
 type Tunnel struct {
@@ -88,4 +91,9 @@ func generateSubdomain() string {
 	b := make([]byte, 4)
 	rand.Read(b)
 	return hex.EncodeToString(b)
+}
+
+// isValidSubdomain checks if a string is a usable subdomain label.
+func isValidSubdomain(s string) bool {
+	return len(s) >= 2 && validSubdomain.MatchString(s)
 }
