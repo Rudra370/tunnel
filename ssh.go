@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
@@ -221,6 +222,13 @@ func (s *SSHServer) handleChannels(chans <-chan ssh.NewChannel, sessionChan chan
 				}
 			}
 		}(chReqs)
+
+		// Read from session so Ctrl+C / client disconnect is handled
+		go func() {
+			io.Copy(io.Discard, ch)
+			ch.SendRequest("exit-status", false, []byte{0, 0, 0, 0})
+			ch.Close()
+		}()
 	}
 }
 
